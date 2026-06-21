@@ -1,0 +1,23 @@
+# Secrets
+.env
+
+# Conda / virtualenv
+.conda-env/
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Built artifacts (regenerable from data/raw via scripts/build_index.py)
+data/processed/
+
+# Internal planning/strategy doc — keep local, not in the public repo
+RAG_Eval_Harness_HANDOFF.md
+
+# OS / editor
+.DS_Store
+.vscode/

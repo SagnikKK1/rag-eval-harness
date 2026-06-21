@@ -1,0 +1,31 @@
+name: Nightly generation eval
+
+# Runs the Ragas faithfulness / answer-relevancy eval on a schedule. Kept off the
+# PR critical path (LLM-as-judge is slow, costs money, and is noisy). No-ops
+# gracefully unless the ANTHROPIC_API_KEY secret is set AND the [eval] extra
+# (ragas) installs in a compatible env — see README "Generation eval" note.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  generation-eval:
+    runs-on: ubuntu-latest
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install (+ optional eval extra)
+        run: |
+          pip install -r requirements.txt
+          pip install ragas langchain-anthropic datasets || echo "ragas extra unavailable; eval will skip"
+      - name: Build index
+        run: python scripts/build_index.py
+      - name: Generation eval (skips cleanly without key / ragas)
+        run: python scripts/run_eval.py --generate

@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-eval-harness"
+version = "0.1.0"
+description = "RAG evaluation harness with adaptive reranking and Corrective-RAG (LangGraph)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Sagnik Dey" }]
+dependencies = [
+    "numpy==2.4.6",
+    "faiss-cpu==1.14.3",
+    "sentence-transformers==5.6.0",
+    "langchain-text-splitters==1.1.2",
+    "langgraph==1.2.6",
+    "rank-bm25==0.2.2",
+    "anthropic==0.111.0",
+    "python-dotenv==1.2.2",
+    "requests==2.34.2",
+]
+
+[project.optional-dependencies]
+# Generation eval. NOTE: current ragas (0.4.x) is import-incompatible with the
+# langchain-core/langgraph 1.x stack above; install in an isolated env or pin a
+# matching ragas when enabling (see README "Generation eval").
+eval = ["ragas", "langchain-anthropic", "datasets"]
+demo = ["fastapi", "uvicorn", "streamlit"]
+dev = ["pytest==9.1.1", "ruff", "mypy", "pre-commit"]
+
+[project.scripts]
+rag-ask = "scripts.ask:main"
+rag-build-index = "scripts.build_index:main"
+rag-eval = "scripts.run_eval:main"
+
+[tool.setuptools]
+packages = ["rag", "eval", "eval.golden", "scripts", "app"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+ignore = ["E731"]  # assigned lambdas are used intentionally for terse formatters
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true

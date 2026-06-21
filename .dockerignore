@@ -1,0 +1,13 @@
+.conda-env/
+.venv/
+.git/
+data/processed/
+**/__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.md
+RAG_Eval_Harness_HANDOFF.md
+.env
+.DS_Store
+.vscode/

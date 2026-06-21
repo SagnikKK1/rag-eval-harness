@@ -1,0 +1,17 @@
+# Core runtime + test deps (enough to build the index, run the harness, and pytest).
+# Generation eval (ragas, langchain-anthropic) is the optional [eval] extra — see pyproject.
+numpy==2.4.6
+faiss-cpu==1.14.3
+sentence-transformers==5.6.0
+langchain-text-splitters==1.1.2
+langgraph==1.2.6
+rank-bm25==0.2.2
+anthropic==0.111.0
+python-dotenv==1.2.2
+requests==2.34.2
+# Demo API (also needed by tests/test_api.py via TestClient)
+fastapi==0.138.0
+httpx==0.28.1
+# Test/lint tooling
+pytest==9.1.1
+ruff==0.14.6
