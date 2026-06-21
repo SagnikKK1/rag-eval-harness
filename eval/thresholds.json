@@ -1,0 +1,6 @@
+{
+  "arm": "baseline",
+  "recall@5": 0.70,
+  "mrr": 0.55,
+  "_comment": "CI gates on the deterministic baseline (dense) arm: catches corpus/index/chunking/embedding regressions without an LLM or the cross-encoder download. Thresholds set just below observed baseline (recall@5=0.75, mrr=0.59); recalibrate when the golden set expands."
+}
