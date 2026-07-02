@@ -3,9 +3,10 @@
     python scripts/ask.py "How is the battery life?"                  # plain retrieval
     python scripts/ask.py "How is the battery life?" --rerank-policy auto
     python scripts/ask.py "Does it support wireless charging?" --mode crag --generate
+    python scripts/ask.py "What's the battery like and 60/200 as a percent?" --mode agent
 
 Retrieval (and the CRAG loop with the threshold grader) run with no key;
-generation, the LLM grader, and LLM reformulation need ANTHROPIC_API_KEY.
+generation, the LLM grader, LLM reformulation, and the tool agent need ANTHROPIC_API_KEY.
 """
 from __future__ import annotations
 
@@ -41,7 +42,7 @@ def _print_trace(trace) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Query the RAG pipeline.")
     parser.add_argument("query", nargs="?", help="The question to ask.")
-    parser.add_argument("--mode", default="plain", choices=["plain", "crag"])
+    parser.add_argument("--mode", default="plain", choices=["plain", "crag", "agent"])
     parser.add_argument("--chunk-size", type=int, default=RagConfig.chunk_size)
     parser.add_argument("--chunk-overlap", type=int, default=RagConfig.chunk_overlap)
     parser.add_argument("-k", type=int, default=RagConfig.k, help="Number of chunks to keep.")
@@ -71,6 +72,17 @@ def main() -> None:
         provider=args.provider,
     )
     pipeline = RagPipeline(config=config)
+
+    if config.mode == "agent":
+        result = pipeline.tool_agent(query)
+        print(f"\nTool agent for: {query!r}  ({result.steps} step(s))\n" + "-" * 60)
+        for tc in result.trace:
+            print(f"  step {tc.step}: {tc.name}({tc.tool_input})")
+        if result.contexts:
+            print(f"\nChunks gathered via search_corpus ({len(result.contexts)}):\n" + "-" * 60)
+            _print_chunks(result.contexts)
+        print("=" * 60 + "\nAnswer:\n" + result.answer)
+        return
 
     if config.mode == "crag":
         crag = pipeline.corrective(query)

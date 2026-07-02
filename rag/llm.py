@@ -28,16 +28,24 @@ def chat(prompt: str, config: RagConfig | None = None) -> str:
     raise ValueError(f"Unknown provider: {config.provider!r} (use 'anthropic' or 'openrouter')")
 
 
-def _anthropic_chat(prompt: str, config: RagConfig) -> str:
+def get_anthropic_client():
+    """Return an Anthropic client, or raise a clear error if the key is unset.
+
+    Shared by plain generation and the tool-using agent (rag/tool_agent.py).
+    """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         raise RuntimeError(
             "ANTHROPIC_API_KEY is not set. Add it to your environment or .env to run "
-            "generation (retrieval works without it)."
+            "generation / the tool agent (retrieval works without it)."
         )
-    import anthropic  # local import: only needed when generating
+    import anthropic  # local import: only needed when calling the LLM
 
-    client = anthropic.Anthropic(api_key=api_key)
+    return anthropic.Anthropic(api_key=api_key)
+
+
+def _anthropic_chat(prompt: str, config: RagConfig) -> str:
+    client = get_anthropic_client()
     resp = client.messages.create(
         model=config.model,
         max_tokens=config.max_tokens,

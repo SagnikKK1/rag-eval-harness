@@ -16,6 +16,7 @@ from .config import RagConfig
 from .generate import generate
 from .index import build_index
 from .retrieve import RetrievedChunk, Retriever
+from .tool_agent import ToolAgentResult, run_tool_agent
 
 REFUSAL = "I couldn't find information about this in the reviews."
 
@@ -48,6 +49,10 @@ class RagPipeline:
         """Run the CRAG loop (retrieval + correction only, no generation)."""
         return run_crag(query, self.retriever, self.config)
 
+    def tool_agent(self, query: str) -> ToolAgentResult:
+        """Run the tool-using agent (Anthropic tool-calling loop). Needs the API key."""
+        return run_tool_agent(query, self.retriever, self.config)
+
     def answer(self, query: str, k: int | None = None, expand: bool = True) -> AnswerResult:
         if self.config.mode == "crag":
             crag = self.corrective(query)
@@ -55,6 +60,10 @@ class RagPipeline:
                 return AnswerResult(query, REFUSAL, [], trace=crag.trace, refused=True)
             text = generate(query, crag.contexts, self.config, expand=expand)
             return AnswerResult(query, text, crag.contexts, trace=crag.trace, refused=False)
+
+        if self.config.mode == "agent":
+            result = self.tool_agent(query)
+            return AnswerResult(query, result.answer, result.contexts)
 
         contexts = self.retrieve(query, k)
         text = generate(query, contexts, self.config, expand=expand)

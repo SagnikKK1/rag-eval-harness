@@ -49,6 +49,12 @@ intersect the item's ground-truth `source_ids`. Reproduce with
                        └────────(weak)────────→ transform → retrieve   (loop)
   ```
   (`rag.graph.crag_graph_mermaid()` renders the live diagram.)
+- **Tool-using agent** (`mode=agent`): an Anthropic **tool-calling loop** where the
+  model decides when to call tools — `search_corpus(query, k)` (the core RAG tool,
+  callable repeatedly with reformulated queries), `fetch_chunk(chunk_id)`, and
+  `calculator(expression)` — then writes a grounded, cited answer. Returns the full
+  tool-call trace + the chunks gathered via `search_corpus`. Key-gated (LLM-driven);
+  the agent loop is unit-tested with a mocked client. (`rag/tools.py`, `rag/tool_agent.py`.)
 - **Adaptive reranking** (`rerank_policy=auto`): the cross-encoder
   (`ms-marco-MiniLM-L-6-v2`) runs *only when dense retrieval looks uncertain*
   (low top score / tight score cluster). Also: `never`, `always`, `llm`.
@@ -83,11 +89,12 @@ rag/        retrieval + generation pipeline
   config.py ingest.py chunk.py embed.py index.py     # corpus -> chunks -> FAISS
   bm25.py policy.py rerank.py retrieve.py            # sparse + adaptive rerank + hybrid
   grade.py reformulate.py agent.py graph.py          # CRAG (LangGraph + plain loop)
+  tools.py tool_agent.py                             # tool-using agent (Anthropic tool-calling)
   llm.py generate.py pipeline.py                     # generation + entry point
 eval/       golden set, metrics, ragas (key-gated), experiment runner, thresholds
-app/        FastAPI API + Streamlit UI (the demo)
+app/        FastAPI API (+ /agent) + Streamlit UI (the demo)
 scripts/    build_index.py  ask.py  run_eval.py
-tests/      keyless: smoke, policy, rerank, CRAG (both engines), hybrid, metrics, api, graph
+tests/      keyless: smoke, policy, rerank, CRAG (both engines), hybrid, metrics, api, graph, tools, tool_agent
 ```
 
 ## Setup
@@ -105,9 +112,10 @@ python scripts/build_index.py                     # build FAISS + BM25 (no key)
 python scripts/ask.py "How is the battery life?"                       # plain retrieval
 python scripts/ask.py "battery drain after android 15" --rerank-policy always
 python scripts/ask.py "wireless charging support" --mode crag          # CRAG trace
+python scripts/ask.py "battery life, and 60/200 as a percent?" --mode agent  # tool agent (needs key)
 python scripts/run_eval.py                                             # A/B table (no key)
 python scripts/run_eval.py --gate                                      # CI gate
-python -m pytest -q                                                    # 30+ tests, no key
+python -m pytest -q                                                    # 41 tests, no key
 
 # Demo
 uvicorn app.main:app --reload          # API at /docs

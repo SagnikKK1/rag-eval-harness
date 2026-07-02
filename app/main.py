@@ -84,3 +84,17 @@ def crag(req: AskRequest) -> dict:
             REFUSAL if result.refused else generate(req.query, result.contexts, pipe.config)
         )
     return payload
+
+
+@app.post("/agent")
+def agent(req: AskRequest) -> dict:
+    """Tool-using agent (Anthropic tool-calling). Needs ANTHROPIC_API_KEY."""
+    pipe = get_pipeline("agent", req.rerank_policy, req.retrieval_mode)
+    result = pipe.tool_agent(req.query)
+    return {
+        "query": req.query,
+        "answer": result.answer,
+        "steps": result.steps,
+        "trace": [asdict(tc) for tc in result.trace],
+        "chunks": _chunk_dicts(result.contexts),
+    }

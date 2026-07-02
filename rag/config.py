@@ -52,8 +52,9 @@ class RagConfig:
     auto_min_margin: float = 0.05
 
     # --- pipeline mode ---
-    mode: str = "plain"     # "plain" (single-shot) | "crag" (corrective agentic loop)
+    mode: str = "plain"     # "plain" | "crag" (corrective loop) | "agent" (tool-using)
     crag_engine: str = "langgraph"  # "langgraph" (StateGraph) | "plain" (hand-rolled loop)
+    max_tool_steps: int = 6  # max tool-call rounds for the tool-using agent (mode="agent")
 
     # --- CRAG (corrective RAG) ---
     grader: str = "threshold"          # "threshold" (free, on rerank/dense score) | "llm"
