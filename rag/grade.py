@@ -5,9 +5,11 @@ Maps the scored candidates to one of CRAG's three actions:
 - AMBIGUOUS — nothing clearly relevant but not clearly wrong; keep the best, augment.
 - INCORRECT — all chunks look irrelevant; discard and re-retrieve.
 
-Default grader thresholds on the relevance score (cross-encoder logit when the
-round was reranked, else dense cosine). An optional ``grader="llm"`` asks the LLM
-for a per-chunk yes/no. Thresholds are calibrated empirically in Part 2.
+Scores arrive on different scales depending on the round: cross-encoder logits
+(reranked), dense cosine (unreranked dense), or BM25/RRF (unreranked sparse or
+hybrid — for which no calibrated thresholds exist, so those rounds are rescored
+with the cross-encoder before grading). ``GradeResult.signal`` records which
+scale the kept scores are on so the CRAG loop can merge rounds coherently.
 """
 from __future__ import annotations
 
@@ -28,18 +30,17 @@ class GradeResult:
     action: Action
     relevant: Scored                      # chunks worth keeping (may be empty)
     labels: list[tuple[str, bool, float]]  # (chunk_id, is_relevant, score) for the trace
+    signal: str = "cosine"                # scale of the kept scores: "ce" | "cosine"
 
 
-def _thresholds(reranked: bool, config: RagConfig) -> tuple[float, float]:
-    if reranked:
+def _thresholds(use_ce: bool, config: RagConfig) -> tuple[float, float]:
+    if use_ce:
         return config.rerank_relevant_threshold, config.rerank_incorrect_threshold
     return config.dense_relevant_threshold, config.dense_incorrect_threshold
 
 
-def _grade_threshold(
-    scored: Scored, reranked: bool, config: RagConfig, relax: float
-) -> GradeResult:
-    rel_t, inc_t = _thresholds(reranked, config)
+def _grade_threshold(scored: Scored, use_ce: bool, config: RagConfig, relax: float) -> GradeResult:
+    rel_t, inc_t = _thresholds(use_ce, config)
     rel_t -= relax  # widen-fallback: loosen the relevance bar on later rounds
     labels = [(c.chunk_id, s >= rel_t, s) for c, s in scored]
     relevant = [(c, s) for c, s in scored if s >= rel_t]
@@ -50,10 +51,12 @@ def _grade_threshold(
     else:
         action = "AMBIGUOUS"
         relevant = [(c, s) for c, s in scored if s > inc_t]  # keep the not-clearly-bad ones
-    return GradeResult(action=action, relevant=relevant, labels=labels)
+    return GradeResult(
+        action=action, relevant=relevant, labels=labels, signal="ce" if use_ce else "cosine"
+    )
 
 
-def _grade_llm(query: str, scored: Scored, config: RagConfig) -> GradeResult:
+def _grade_llm(query: str, scored: Scored, signal: str, config: RagConfig) -> GradeResult:
     from .llm import chat
 
     labels: list[tuple[str, bool, float]] = []
@@ -69,7 +72,7 @@ def _grade_llm(query: str, scored: Scored, config: RagConfig) -> GradeResult:
         if is_rel:
             relevant.append((chunk, score))
     action: Action = "CORRECT" if relevant else "INCORRECT"
-    return GradeResult(action=action, relevant=relevant, labels=labels)
+    return GradeResult(action=action, relevant=relevant, labels=labels, signal=signal)
 
 
 def grade(
@@ -79,6 +82,16 @@ def grade(
     config: RagConfig,
     relax: float = 0.0,
 ) -> GradeResult:
+    # Sparse/hybrid scores (BM25 logits, RRF sums) have no calibrated thresholds:
+    # rescore with the cross-encoder so grading always sees a known scale.
+    if not reranked and config.retrieval_mode != "dense" and scored:
+        from .rerank import cross_encoder_scores
+
+        ce = cross_encoder_scores(query, scored, config)
+        scored = [(c, s) for (c, _), s in zip(scored, ce)]
+        reranked = True
+
+    signal = "ce" if reranked else "cosine"
     if config.grader == "llm":
-        return _grade_llm(query, scored, config)
+        return _grade_llm(query, scored, signal, config)
     return _grade_threshold(scored, reranked, config, relax)

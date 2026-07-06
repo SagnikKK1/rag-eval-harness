@@ -14,7 +14,7 @@ from pathlib import Path
 
 GOLDEN_PATH = Path(__file__).resolve().parent / "golden_set.jsonl"
 
-TYPES = ("factoid", "multihop", "paraphrase", "refuse")
+TYPES = ("factoid", "cooccurrence", "paraphrase", "refuse")
 
 
 @dataclass(frozen=True)

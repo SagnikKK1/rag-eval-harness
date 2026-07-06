@@ -17,7 +17,7 @@ from typing import Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from .agent import _RELAX_STEP, _WIDEN_FACTOR, CragResult, CragRound, _dedup_keep_best
+from .agent import _RELAX_STEP, _WIDEN_FACTOR, CragResult, CragRound, _finalize_pool
 from .config import RagConfig
 from .grade import grade
 from .reformulate import reformulate
@@ -64,7 +64,8 @@ def build_crag_graph(retriever: Retriever | None, config: RagConfig):
             correction=None,
         )
         return {
-            "gathered": state["gathered"] + list(result.relevant),
+            "gathered": state["gathered"]
+            + [(c, s, result.signal) for c, s in result.relevant],
             "action": result.action,
             "trace": state["trace"] + [entry],
         }
@@ -91,7 +92,7 @@ def build_crag_graph(retriever: Retriever | None, config: RagConfig):
         }
 
     def finalize(state: CragState) -> dict:
-        final = _dedup_keep_best(state["gathered"])[: config.k]
+        final = _finalize_pool(state["query"], state["gathered"], config)
         contexts = [to_retrieved(chunk, score) for chunk, score in final]
         return {"contexts": contexts, "refused": not contexts}
 

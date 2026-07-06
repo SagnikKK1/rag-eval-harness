@@ -67,6 +67,11 @@ class RagConfig:
     max_correction_rounds: int = 2     # extra retrieve+grade rounds after the first
     reformulate: bool = True           # rewrite the query between correction rounds
 
+    # --- abstention (threshold-refusal baseline for non-CRAG arms) ---
+    # Refuse when the top-1 dense cosine is below this. Uncalibrated default —
+    # NOT tuned on the golden refuse items (that would be test-set leakage).
+    refusal_min_top_score: float = 0.35
+
     # --- generation ---
     provider: str = "anthropic"               # "anthropic" | "openrouter"
     model: str = "claude-haiku-4-5-20251001"  # generation model; sonnet is the quality upgrade

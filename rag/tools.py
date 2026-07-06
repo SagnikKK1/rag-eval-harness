@@ -77,7 +77,11 @@ def _safe_eval(node):
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return node.value
     if isinstance(node, ast.BinOp) and type(node.op) in _BIN_OPS:
-        return _BIN_OPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
+        left, right = _safe_eval(node.left), _safe_eval(node.right)
+        # Guard ** against bignum DoS (model-generated '9**9**9**9' would hang the worker).
+        if isinstance(node.op, ast.Pow) and (abs(right) > 100 or abs(left) > 1e6):
+            raise ValueError("exponent out of range")
+        return _BIN_OPS[type(node.op)](left, right)
     if isinstance(node, ast.UnaryOp) and type(node.op) in _UNARY_OPS:
         return _UNARY_OPS[type(node.op)](_safe_eval(node.operand))
     raise ValueError("unsupported expression")

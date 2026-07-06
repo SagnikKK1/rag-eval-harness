@@ -1,6 +1,7 @@
 {
-  "arm": "baseline",
-  "recall@5": 0.70,
-  "mrr": 0.55,
-  "_comment": "CI gates on the deterministic baseline (dense) arm: catches corpus/index/chunking/embedding regressions without an LLM or the cross-encoder download. Thresholds set just below observed baseline (recall@5=0.75, mrr=0.59); recalibrate when the golden set expands."
+  "arms": {
+    "baseline": { "recall@5": 0.75, "mrr": 0.6 },
+    "reranked": { "recall@5": 0.8, "mrr": 0.65 }
+  },
+  "_comment": "CI regression gate. Deterministic, keyless. Calibrated 2026-07-07 against comment-level gold (baseline recall@5=0.80 mrr=0.646; reranked 0.85/0.729): thresholds sit ~1 golden item below observed. Gating both arms means a reranker-path regression can no longer merge green. Recalibrate whenever the golden set changes."
 }

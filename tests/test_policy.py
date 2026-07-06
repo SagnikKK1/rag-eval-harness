@@ -41,3 +41,11 @@ def test_use_reranker_alias_maps_to_always():
 def test_empty_candidates_not_confident_on_auto():
     # No candidates => not confident => policy says rerank (score_candidates no-ops anyway).
     assert should_rerank("q", [], RagConfig(rerank_policy="auto")) is True
+
+
+def test_auto_always_reranks_for_non_dense_modes():
+    # BM25/RRF scores aren't cosines — the confidence heuristic is meaningless there.
+    confident = _cands([0.80, 0.30, 0.20])  # would skip rerank under dense
+    for mode in ("sparse", "hybrid"):
+        cfg = RagConfig(rerank_policy="auto", retrieval_mode=mode)
+        assert should_rerank("q", confident, cfg) is True

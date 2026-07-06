@@ -75,13 +75,20 @@ def test_agent_multi_tool_calculator(monkeypatch, tiny_retriever):
 
 
 def test_agent_forces_final_answer_when_budget_exhausted(monkeypatch, tiny_retriever):
-    # Every step asks to search; budget runs out -> a final no-tools call yields the answer.
+    # Every step asks to search; budget runs out -> a final forced-answer call.
     tool_resp = FR("tool_use", [FB("tool_use", name="search_corpus",
                                    input={"query": "x"}, id="tu")])
     final = FR("end_turn", [FB("text", text="Final answer after budget.")])
-    _patch(monkeypatch, [tool_resp, tool_resp, final])
+    client = _patch(monkeypatch, [tool_resp, tool_resp, final])
 
     result = run_tool_agent("q", tiny_retriever, max_steps=2)
 
     assert result.steps == 2
     assert result.answer == "Final answer after budget."
+    # API contract: history contains tool_use/tool_result blocks, so the salvage
+    # call MUST still pass `tools` (else Anthropic 400s) with tool_choice=none.
+    salvage = client.messages.calls[-1]
+    assert salvage.get("tools"), "salvage call must include tools"
+    assert salvage.get("tool_choice") == {"type": "none"}
+    # reproducibility: config temperature must reach every call
+    assert all(kw.get("temperature") == 0.0 for kw in client.messages.calls)

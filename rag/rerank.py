@@ -20,6 +20,10 @@ if TYPE_CHECKING:
 
 Candidates = list[tuple["Chunk", float]]
 
+# Lightweight instrumentation: the eval harness reads/resets this to report the
+# cross-encoder invocation rate per arm (the "adaptive saves CE calls" claim).
+CE_STATS = {"calls": 0}
+
 
 @lru_cache(maxsize=2)
 def _get_cross_encoder(name: str):
@@ -31,6 +35,7 @@ def _get_cross_encoder(name: str):
 
 def cross_encoder_scores(query: str, candidates: Candidates, config: RagConfig) -> list[float]:
     """Raw cross-encoder relevance logits for each candidate, in input order."""
+    CE_STATS["calls"] += 1
     model = _get_cross_encoder(config.reranker_model)
     pairs = [(query, chunk.text) for chunk, _ in candidates]
     return [float(s) for s in model.predict(pairs)]
@@ -51,7 +56,14 @@ def score_candidates(
     return True, reranked
 
 
-def rerank(query: str, candidates: Candidates, config: RagConfig) -> Candidates:
-    """Plain-path helper: (adaptively) rerank and truncate to top-k."""
+def rerank(
+    query: str, candidates: Candidates, config: RagConfig, k: int | None = None
+) -> Candidates:
+    """Plain-path helper: (adaptively) rerank and truncate to top-k.
+
+    ``k`` overrides ``config.k`` so callers requesting a deeper ranking (e.g. the
+    eval harness at depth 10, or the API with a per-request k) are not silently
+    capped by the config default.
+    """
     _, scored = score_candidates(query, candidates, config)
-    return scored[: config.k]
+    return scored[: config.k if k is None else k]

@@ -72,9 +72,15 @@ class Retriever:
             return rrf_fuse([dense, sparse], self.config.rrf_k, n)
         raise ValueError(f"Unknown retrieval_mode: {mode!r}")
 
+    def dense_top_score(self, query: str) -> float:
+        """Top-1 dense cosine for the query — the retrieval-confidence signal used
+        by the threshold-refusal baseline in the eval harness."""
+        hits = self.index.search(self.embedder.encode_one(query), 1)
+        return hits[0][1] if hits else 0.0
+
     def retrieve(self, query: str, k: int | None = None) -> list[RetrievedChunk]:
         k = self.config.k if k is None else k
         # Fetch a wider candidate pool unless reranking is disabled outright.
         n = k if effective_rerank_policy(self.config) == "never" else max(self.config.top_n, k)
-        ranked = rerank(query, self.candidates(query, n), self.config)[:k]
+        ranked = rerank(query, self.candidates(query, n), self.config, k=k)
         return [to_retrieved(c, score) for c, score in ranked]

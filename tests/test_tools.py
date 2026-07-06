@@ -17,6 +17,14 @@ def test_calculator_rejects_unsafe():
     )
 
 
+def test_calculator_pow_guard_blocks_bignum_dos():
+    ctx = ToolContext(retriever=None)
+    # would hang the worker computing a bignum without the guard
+    assert execute("calculator", {"expression": "9**9**9**9"}, ctx).startswith("Error")
+    assert execute("calculator", {"expression": "2**1000"}, ctx).startswith("Error")
+    assert execute("calculator", {"expression": "2**10"}, ctx) == "1024"
+
+
 def test_search_corpus_retrieves_and_accumulates(tiny_retriever):
     ctx = ToolContext(retriever=tiny_retriever)
     out = execute("search_corpus", {"query": "how is the battery life", "k": 3}, ctx)

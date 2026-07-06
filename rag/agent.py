@@ -41,12 +41,28 @@ class CragResult:
     refused: bool
 
 
-def _dedup_keep_best(scored: list[tuple]) -> list[tuple]:
+def _finalize_pool(query: str, gathered: list[tuple], config: RagConfig) -> list[tuple]:
+    """Dedup the accumulated (chunk, score, signal) pool and produce a top-k ranking.
+
+    Rounds may score on different scales (cross-encoder logits vs dense cosine).
+    Sorting a mixed pool by raw score is meaningless, so when signals are mixed
+    the deduped pool is rescored once with the cross-encoder against the ORIGINAL
+    query — one arbiter, one scale. Single-signal pools sort directly.
+    """
+    if not gathered:
+        return []
+    signals = {sig for _, _, sig in gathered}
     best: dict[str, tuple] = {}
-    for chunk, score in scored:
+    for chunk, score, _sig in gathered:
         if chunk.chunk_id not in best or score > best[chunk.chunk_id][1]:
             best[chunk.chunk_id] = (chunk, score)
-    return sorted(best.values(), key=lambda cs: cs[1], reverse=True)
+    pool = list(best.values())
+    if len(signals) > 1:
+        from .rerank import cross_encoder_scores
+
+        ce = cross_encoder_scores(query, pool, config)
+        pool = [(c, s) for (c, _), s in zip(pool, ce)]
+    return sorted(pool, key=lambda cs: cs[1], reverse=True)[: config.k]
 
 
 def run_crag(query: str, retriever: Retriever, config: RagConfig | None = None) -> CragResult:
@@ -74,7 +90,7 @@ def _run_crag_plain(query: str, retriever: Retriever, config: RagConfig) -> Crag
         candidates = retriever.candidates(used_query, n)
         reranked, scored = score_candidates(used_query, candidates, config)
         result = grade(used_query, scored, reranked, config, relax=relax)
-        gathered.extend(result.relevant)
+        gathered.extend((c, s, result.signal) for c, s in result.relevant)
 
         last_round = round_idx == max_rounds - 1
         correction: str | None = None
@@ -102,6 +118,6 @@ def _run_crag_plain(query: str, retriever: Retriever, config: RagConfig) -> Crag
         if result.action == "CORRECT" or last_round:
             break
 
-    final = _dedup_keep_best(gathered)[: config.k]
+    final = _finalize_pool(query, gathered, config)
     contexts = [to_retrieved(chunk, score) for chunk, score in final]
     return CragResult(query=query, contexts=contexts, trace=trace, refused=not contexts)

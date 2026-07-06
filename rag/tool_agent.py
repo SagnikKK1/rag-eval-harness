@@ -67,6 +67,7 @@ def run_tool_agent(
         steps = step + 1
         resp = client.messages.create(
             model=config.model, max_tokens=config.max_tokens,
+            temperature=config.temperature,
             system=SYSTEM, tools=TOOL_SPECS, messages=messages,
         )
         if getattr(resp, "stop_reason", None) == "tool_use":
@@ -85,10 +86,14 @@ def run_tool_agent(
             answer = _text_of(resp.content)
             break
 
-    if not answer:  # ran out of steps mid-tool-use → force a final answer (no tools)
+    if not answer:  # ran out of steps mid-tool-use → force a final answer
+        # The history contains tool_use/tool_result blocks, so the API requires the
+        # `tools` param to still be present; tool_choice="none" forbids further calls.
         resp = client.messages.create(
             model=config.model, max_tokens=config.max_tokens,
+            temperature=config.temperature,
             system=SYSTEM + " Provide your final answer now using what you have.",
+            tools=TOOL_SPECS, tool_choice={"type": "none"},
             messages=messages,
         )
         answer = _text_of(resp.content)

@@ -30,7 +30,14 @@ def effective_rerank_policy(config: RagConfig) -> str:
 
 
 def _auto_is_confident(candidates: Candidates, config: RagConfig) -> bool:
-    """Confident (=> skip rerank) when the top score is high and well-separated."""
+    """Confident (=> skip rerank) when the top score is high and well-separated.
+
+    Only meaningful for dense cosine scores: BM25 logits are unbounded and RRF
+    scores live near 1/rrf_k, so for sparse/hybrid first stages the heuristic
+    can't be trusted and we always rerank instead.
+    """
+    if config.retrieval_mode != "dense":
+        return False
     if not candidates:
         return False
     scores = [s for _, s in candidates]
