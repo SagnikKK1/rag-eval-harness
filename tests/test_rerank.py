@@ -23,7 +23,9 @@ class FakeCrossEncoder:
 
 
 def _patch_ce(monkeypatch):
-    monkeypatch.setattr(rerank_mod, "_get_cross_encoder", lambda name: FakeCrossEncoder())
+    monkeypatch.setattr(
+        rerank_mod, "_get_cross_encoder", lambda name, revision=None: FakeCrossEncoder()
+    )
 
 
 def test_rerank_reorders_by_relevance(monkeypatch):

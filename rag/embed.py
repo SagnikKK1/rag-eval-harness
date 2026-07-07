@@ -15,15 +15,15 @@ from .config import RagConfig
 
 
 @lru_cache(maxsize=4)
-def get_model(name: str) -> SentenceTransformer:
-    """Load (and cache) a SentenceTransformer by name."""
-    return SentenceTransformer(name)
+def get_model(name: str, revision: str | None = None) -> SentenceTransformer:
+    """Load (and cache) a SentenceTransformer by name at a pinned revision."""
+    return SentenceTransformer(name, revision=revision)
 
 
 class Embedder:
     def __init__(self, config: RagConfig | None = None):
         self.config = config or RagConfig()
-        self.model = get_model(self.config.embed_model)
+        self.model = get_model(self.config.embed_model, self.config.embed_model_revision)
 
     @property
     def dim(self) -> int:

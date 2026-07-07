@@ -30,8 +30,8 @@ RESULTS_DIR = Path(__file__).resolve().parent.parent / "eval" / "results"
 THRESHOLDS = Path(__file__).resolve().parent.parent / "eval" / "thresholds.json"
 
 COLUMNS = [
-    "arm", "recall@1", "recall@3", "recall@5", "recall@10", "mrr",
-    "refusal_acc", "false_refusal", "latency_ms", "ce_calls/q",
+    "arm", "recall@1", "recall@3", "recall@5", "recall@10", "mrr", "ndcg@10",
+    "refusal_acc", "false_refusal", "latency_ms", "p95_ms", "ce_calls/q",
     "faithfulness", "answer_relevancy",
 ]
 
@@ -70,9 +70,11 @@ def _row(result: dict) -> dict:
         "recall@5": f"{r['recall_at_5']:.3f}",
         "recall@10": f"{r['recall_at_10']:.3f}",
         "mrr": f"{r['mrr']:.3f}",
+        "ndcg@10": f"{r['ndcg_at_10']:.3f}",
         "refusal_acc": f"{result['refusal']['accuracy']:.3f}",
         "false_refusal": f"{result['refusal']['false_refusal_rate']:.3f}",
         "latency_ms": f"{result['latency_ms']:.0f}",
+        "p95_ms": f"{result['latency_p95_ms']:.0f}",
         "ce_calls/q": f"{result['ce_calls_per_query']:.2f}",
         "faithfulness": gen_cell("faithfulness"),
         "answer_relevancy": gen_cell("answer_relevancy"),
@@ -101,6 +103,49 @@ def _significance_rows(results: list[dict]) -> list[str]:
     return lines
 
 
+def _per_type_rows(results: list[dict]) -> list[str]:
+    """recall@5 / MRR per item type per arm — exposes e.g. how much of an arm's
+    score comes from lexically-easy factoids vs de-lexicalized paraphrases."""
+    from eval.stats import _hit_at, _rr  # reuse the per-item helpers
+
+    types = sorted({t for r in results for t in r.get("per_item_types", [])})
+    if not types:
+        return []
+    lines = ["| arm | " + " | ".join(f"{t} r@5 / MRR (n)" for t in types) + " |",
+             "| --- | " + " | ".join("---" for _ in types) + " |"]
+    for r in results:
+        cells = []
+        for t in types:
+            pairs = [h for h, ty in zip(r["per_item_hits"], r["per_item_types"]) if ty == t]
+            if not pairs:
+                cells.append("—")
+                continue
+            r5 = sum(_hit_at(h, 5) for h in pairs) / len(pairs)
+            mrr = sum(_rr(h) for h in pairs) / len(pairs)
+            cells.append(f"{r5:.2f} / {mrr:.2f} ({len(pairs)})")
+        lines.append(f"| {r['arm']} | " + " | ".join(cells) + " |")
+    return lines
+
+
+def _risk_coverage_rows() -> list[str]:
+    """Sweep the abstention threshold: refusal accuracy vs false-refusal trade-off.
+    Uses top-1 dense cosine (the mechanism every non-CRAG arm shares)."""
+    from rag.retrieve import Retriever
+
+    golden = load_golden()
+    retriever = Retriever(config=RagConfig())
+    scores = [(retriever.dense_top_score(g.question), g.is_refuse) for g in golden]
+    n_refuse = sum(1 for _, is_r in scores if is_r)
+    n_ans = len(scores) - n_refuse
+    lines = ["| threshold | refusal_acc (refuse items) | false_refusal (answerable) |",
+             "| --- | --- | --- |"]
+    for t in (0.25, 0.30, 0.35, 0.40, 0.45, 0.50):
+        ra = sum(1 for s, is_r in scores if is_r and s < t) / n_refuse
+        fr = sum(1 for s, is_r in scores if not is_r and s < t) / n_ans
+        lines.append(f"| {t:.2f} | {ra:.3f} | {fr:.3f} |")
+    return lines
+
+
 def _markdown(rows: list[dict], results: list[dict], meta: str, generated: bool) -> str:
     head = "| " + " | ".join(COLUMNS) + " |"
     sep = "| " + " | ".join("---" for _ in COLUMNS) + " |"
@@ -111,6 +156,8 @@ def _markdown(rows: list[dict], results: list[dict], meta: str, generated: bool)
         if generated else
         "_Generation columns pending ANTHROPIC_API_KEY (`--generate`)._"
     )
+    per_type = "\n".join(_per_type_rows(results))
+    risk_cov = "\n".join(_risk_coverage_rows())
     return (
         f"### RAG A/B results\n\n{meta}\n\n{head}\n{sep}\n{body}\n\n"
         f"Refusal: `refusal_acc` = correct refusals on not-in-corpus items; "
@@ -118,7 +165,10 @@ def _markdown(rows: list[dict], results: list[dict], meta: str, generated: bool)
         f"refuse when top-1 dense cosine < {RagConfig().refusal_min_top_score} "
         f"(uncalibrated default, not tuned on the golden set).\n\n"
         f"#### Paired significance vs baseline\n\n{sig}\n\n"
-        f"At this N, treat non-significant deltas as directional only.\n\n{gen_note}\n"
+        f"At this N, treat non-significant deltas as directional only.\n\n"
+        f"#### Per-type breakdown\n\n{per_type}\n\n"
+        f"#### Abstention risk–coverage (dense-confidence threshold sweep)\n\n"
+        f"{risk_cov}\n\n{gen_note}\n"
     )
 
 

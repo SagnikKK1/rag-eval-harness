@@ -21,39 +21,42 @@ gate fails the build on retrieval regressions.
 > mechanism), and all deltas carry **paired significance tests**. The corrected
 > numbers below are smaller and honest.
 
-Golden set: **20 answerable + 6 not-in-corpus** items (factoid / co-occurrence /
-paraphrase / refuse). Retrieve depth-10; a retrieved chunk is a hit iff it
-contains a gold comment. `sparse` (BM25-only) is the **lexical control** — gold
-labels are keyword-resolved, so this arm bounds how much score keyword matching
-alone explains. Reproduce with `python scripts/run_eval.py`.
+Golden set: **52 answerable + 14 not-in-corpus** items (factoid / co-occurrence /
+paraphrase / refuse, incl. *near-domain* refuses like "Samsung washing machine
+price"). Retrieve depth-10; a retrieved chunk is a hit iff it contains a gold
+comment. `sparse` (BM25-only) is the **lexical control** — gold labels are
+keyword-resolved, so this arm bounds how much score keyword matching alone
+explains. Reproduce with `python scripts/run_eval.py`.
 
-| arm | recall@1 | recall@5 | recall@10 | MRR | refusal_acc | false_refusal | latency ms/q | CE calls/q |
+| arm | recall@1 | recall@5 | MRR | nDCG@10 | refusal_acc | false_refusal | latency ms/q | CE calls/q |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| baseline (dense) | 0.550 | 0.800 | 0.850 | 0.646 | 0.667 | 0.050 | 34 | 0 |
-| sparse (BM25 control) | 0.650 | 0.700 | 0.800 | 0.675 | 0.667 | 0.050 | 15 | 0 |
-| hybrid (RRF) | 0.550 | 0.800 | 0.850 | 0.681 | 0.667 | 0.050 | 23 | 0 |
-| reranked (always) | 0.650 | 0.850 | 0.850 | 0.729 | 0.667 | 0.050 | 503 | 1.00 |
-| reranked (adaptive) | 0.600 | 0.850 | 0.850 | 0.704 | 0.667 | 0.050 | 160 | 0.77 |
-| CRAG (agentic) | 0.650 | 0.700 | 0.700 | 0.675 | 0.667 | 0.150 | 755 | 1.77 |
+| baseline (dense) | 0.577 | 0.865 | 0.690 | 0.471 | 0.714 | 0.058 | 26 | 0 |
+| sparse (BM25 control) | 0.635 | 0.846 | 0.724 | 0.451 | 0.714 | 0.058 | 13 | 0 |
+| hybrid (RRF) | 0.654 | 0.923 | 0.775 | 0.511 | 0.714 | 0.058 | 23 | 0 |
+| **reranked (always)** | **0.750** | 0.904 | **0.821** | **0.577** | 0.714 | 0.058 | 298 | 1.00 |
+| reranked (adaptive) | 0.692 | 0.885 | 0.783 | 0.542 | 0.714 | 0.058 | 166 | 0.71 |
+| CRAG (agentic) | 0.673 | 0.750 | 0.712 | 0.333 | 0.714 | 0.154 | 835 | 1.71 |
 
-**Paired significance vs baseline (McNemar on recall@5; bootstrap 95% CI on ΔMRR):
-at N=20, *no* arm's delta is statistically significant** — full table in
-[eval/results/results.md](eval/results/results.md). What the data *does* support:
+**Paired significance vs baseline** (McNemar on recall@5; paired bootstrap 95% CI
+on ΔMRR; N=52) — full tables incl. per-type breakdown and the risk–coverage sweep
+in [eval/results/results.md](eval/results/results.md):
 
-- **Reranking trends positive consistently** (ΔMRR +0.08, CI [−0.06, +0.23]; and it
-  wins at every chunk size in the sweep below) at ~15× baseline latency; **adaptive**
-  keeps most of the trend at ~⅓ the reranker's latency, invoking the cross-encoder
-  on 77% of queries.
-- **Abstention is a trade-off, now visible**: a simple dense-confidence threshold
-  gets refusal 0.667 on *every* arm at 5% false refusals; CRAG matches it while
-  *tripling* false refusals (0.15) and paying recall@10 0.85→0.70 — its grader
-  discards true positives. (The earlier "CRAG 0.67 vs everyone 0.00" compared a
-  mechanism against arms that had none.)
-- The **BM25 control** is competitive on this keyword-derived gold (recall@1 0.65) —
-  quantifying the residual lexical bias the paraphrase items are designed to probe.
+- **Cross-encoder reranking: ΔMRR +0.131, 95% CI [+0.037, +0.227] — significant.**
+  Cost: ~11× baseline latency (26→298 ms/q).
+- **Adaptive reranking: ΔMRR +0.093, 95% CI [+0.011, +0.177] — significant**, at
+  ~56% of the always-rerank latency, invoking the cross-encoder on 71% of queries.
+- **Per-type breakdown is the semantic-retrieval story**: on de-lexicalized
+  paraphrase items, BM25 collapses (recall@5 0.42) while dense holds 0.75 —
+  keyword matching can't find evidence that's worded differently.
+- **Hybrid** trends strongest among no-CE arms (recall@3 0.90, ΔMRR +0.085
+  [−0.009, +0.184]) but doesn't clear significance yet.
+- **Abstention risk–coverage** (threshold sweep in results.md): at 0.35, refusal
+  0.714 with 5.8% false refusals; 0.45 buys 0.857 refusal at 25% false refusals.
+  CRAG matches threshold refusal while tripling false refusals (0.154) and paying
+  recall@10 0.90→0.75 — its grader discards true positives.
 - **Chunking sweep** ([eval/results/chunk_sweep.md](eval/results/chunk_sweep.md)):
-  reranked beats baseline at all of 256/32, 512/64, 1024/128 (e.g. MRR 0.775 vs
-  0.660 at 256/32); chunk size itself moves metrics less than reranking does.
+  reranking wins at every chunk size (MRR +0.11–0.12 at each of 256/32, 512/64,
+  1024/128); 1024/128+reranked is the best cell (MRR 0.861, recall@10 0.981).
 - **Generation metrics** (faithfulness / answer-relevancy) are **pending an
   Anthropic API key** — see below.
 
@@ -90,8 +93,9 @@ at N=20, *no* arm's delta is statistically significant** — full table in
   (`eval/golden/build_seed.py` — reproducible, spillover-free, fails loudly on
   unresolved items). Expansion toward 150–300 items (LLM-drafted, hand-verified)
   is planned once the key is available.
-- **Metrics** `eval/retrieval_metrics.py` — recall@k, MRR, refusal accuracy
-  (deterministic, no key). `eval/stats.py` — paired McNemar + bootstrap CIs.
+- **Metrics** `eval/retrieval_metrics.py` — recall@k, MRR, nDCG@10 (ideal DCG uses
+  each item's true relevant-chunk count), refusal accuracy (deterministic, no key).
+  `eval/stats.py` — paired McNemar + bootstrap CIs.
   `eval/ragas_eval.py` — Ragas faithfulness / answer-relevancy (key-gated; see note).
 - **Runner** `eval/experiment.py` + `scripts/run_eval.py` — sweeps 6 arms by
   varying `RagConfig`; measures quality + latency + CE invocation rate; stamps
@@ -165,9 +169,9 @@ ragas pin). The retrieval A/B + CI gate are fully functional without it.
 
 ## Limitations & honesty
 
-- **N=20 answerable items** — no arm-vs-baseline delta is significant yet (the
-  significance table says so explicitly). Expansion to 150–300 is the next step;
-  until then, deltas are directional.
+- **N=52 answerable items** — enough for the reranking deltas to clear paired
+  significance, but CIs are still wide; hybrid/CRAG deltas remain directional.
+  Expansion toward 150–300 (LLM-drafted, hand-verified) is the next step.
 - **Gold labels are keyword-derived** (word-boundary, comment-level, reproducible —
   but still lexical). The BM25-only control arm quantifies the resulting bias and
   the de-lexicalized paraphrase items probe semantic retrieval; full hand

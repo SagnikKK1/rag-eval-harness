@@ -57,9 +57,20 @@ def _run_item(pipe: RagPipeline, item: GoldenItem, config: RagConfig):
     return sets, refused, time.perf_counter() - t0
 
 
+def _n_relevant_chunks(pipe: RagPipeline, gold: set[str]) -> int:
+    """True number of corpus chunks containing >=1 gold comment (for ideal DCG)."""
+    return sum(1 for c in pipe.retriever.index.chunks if set(c.source_ids) & gold)
+
+
+def _p95(xs: list[float]) -> float:
+    return sorted(xs)[min(len(xs) - 1, int(0.95 * len(xs)))] if xs else 0.0
+
+
 def run_arm(name: str, config: RagConfig, golden: list[GoldenItem], with_generation: bool) -> dict:
     pipe = RagPipeline(config)
     answerable_hits: list[list[bool]] = []
+    n_relevants: list[int] = []
+    item_types: list[str] = []          # parallel to answerable_hits (per-type breakdown)
     refuse_flags: list[bool] = []       # on refuse items: did it (correctly) refuse?
     false_refusals: list[bool] = []     # on answerable items: did it (wrongly) refuse?
     latencies: list[float] = []
@@ -73,10 +84,13 @@ def run_arm(name: str, config: RagConfig, golden: list[GoldenItem], with_generat
             refuse_flags.append(refused)
         else:
             false_refusals.append(refused)
-            answerable_hits.append(hit_ranks(sets, set(item.gold_source_ids)))
+            gold = set(item.gold_source_ids)
+            answerable_hits.append(hit_ranks(sets, gold))
+            n_relevants.append(_n_relevant_chunks(pipe, gold))
+            item_types.append(item.type)
     ce_calls = rerank_mod.CE_STATS["calls"] - ce_calls_before
 
-    retrieval = evaluate_retrieval(answerable_hits)
+    retrieval = evaluate_retrieval(answerable_hits, n_relevants)
     n_ref, refuse_acc = refusal_accuracy(refuse_flags)
 
     generation = None
@@ -99,6 +113,7 @@ def run_arm(name: str, config: RagConfig, golden: list[GoldenItem], with_generat
         "arm": name,
         "retrieval": retrieval.as_dict(),
         "per_item_hits": answerable_hits,   # for paired stats vs baseline
+        "per_item_types": item_types,       # for the per-type breakdown
         "refusal": {
             "n": n_ref,
             "accuracy": refuse_acc,
@@ -107,6 +122,7 @@ def run_arm(name: str, config: RagConfig, golden: list[GoldenItem], with_generat
             ),
         },
         "latency_ms": 1000.0 * sum(latencies) / len(latencies) if latencies else 0.0,
+        "latency_p95_ms": 1000.0 * _p95(latencies),
         "ce_calls_per_query": ce_calls / len(golden) if golden else 0.0,
         "generation": generation,
     }

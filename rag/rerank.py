@@ -26,17 +26,17 @@ CE_STATS = {"calls": 0}
 
 
 @lru_cache(maxsize=2)
-def _get_cross_encoder(name: str):
+def _get_cross_encoder(name: str, revision: str | None = None):
     # Imported lazily so a non-reranked query pulls in no extra model/runtime.
     from sentence_transformers import CrossEncoder
 
-    return CrossEncoder(name)
+    return CrossEncoder(name, revision=revision)
 
 
 def cross_encoder_scores(query: str, candidates: Candidates, config: RagConfig) -> list[float]:
     """Raw cross-encoder relevance logits for each candidate, in input order."""
     CE_STATS["calls"] += 1
-    model = _get_cross_encoder(config.reranker_model)
+    model = _get_cross_encoder(config.reranker_model, config.reranker_revision)
     pairs = [(query, chunk.text) for chunk, _ in candidates]
     return [float(s) for s in model.predict(pairs)]
 

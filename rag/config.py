@@ -33,6 +33,10 @@ class RagConfig:
 
     # --- embedding / index ---
     embed_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    # HF revisions pinned so a silent upstream re-upload can't shift the committed
+    # index or the CI gate numbers.
+    embed_model_revision: str = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+    reranker_revision: str = "c5ee24cb16019beea0893ab7796b1df96625c6b8"
 
     # --- retrieval ---
     k: int = 5              # final number of chunks returned
