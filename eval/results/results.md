@@ -1,15 +1,15 @@
 ### RAG A/B results
 
-run: 2026-07-07 15:15 UTC · git 86fcd8f · N=52 answerable + 14 refuse · depth 10 · embed `sentence-transformers/all-MiniLM-L6-v2` · reranker `cross-encoder/ms-marco-MiniLM-L-6-v2` · chunks 512/64
+run: 2026-07-07 15:21 UTC · git bbfd2d3 · N=52 answerable + 14 refuse · depth 10 · embed `sentence-transformers/all-MiniLM-L6-v2` · reranker `cross-encoder/ms-marco-MiniLM-L-6-v2` · chunks 512/64
 
 | arm | recall@1 | recall@3 | recall@5 | recall@10 | mrr | ndcg@10 | refusal_acc | false_refusal | latency_ms | p95_ms | ce_calls/q | faithfulness | answer_relevancy |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| baseline | 0.577 | 0.788 | 0.865 | 0.904 | 0.690 | 0.471 | 0.714 | 0.058 | 26 | 50 | 0.00 | — | — |
-| sparse | 0.635 | 0.769 | 0.846 | 0.904 | 0.724 | 0.451 | 0.714 | 0.058 | 13 | 21 | 0.00 | — | — |
-| hybrid | 0.654 | 0.904 | 0.923 | 0.942 | 0.775 | 0.511 | 0.714 | 0.058 | 23 | 28 | 0.00 | — | — |
-| reranked | 0.750 | 0.885 | 0.904 | 0.923 | 0.821 | 0.577 | 0.714 | 0.058 | 298 | 332 | 1.00 | — | — |
-| adaptive | 0.692 | 0.865 | 0.885 | 0.904 | 0.783 | 0.542 | 0.714 | 0.058 | 166 | 342 | 0.71 | — | — |
-| crag | 0.673 | 0.750 | 0.750 | 0.750 | 0.712 | 0.333 | 0.714 | 0.154 | 835 | 1867 | 1.71 | — | — |
+| baseline | 0.577 | 0.788 | 0.865 | 0.904 | 0.690 | 0.471 | 0.714 | 0.058 | 35 | 85 | 0.00 | — | — |
+| sparse | 0.635 | 0.769 | 0.846 | 0.904 | 0.724 | 0.451 | 0.714 | 0.058 | 25 | 49 | 0.00 | — | — |
+| hybrid | 0.654 | 0.904 | 0.923 | 0.942 | 0.775 | 0.511 | 0.714 | 0.058 | 39 | 67 | 0.00 | — | — |
+| reranked | 0.750 | 0.885 | 0.904 | 0.923 | 0.821 | 0.577 | 0.714 | 0.058 | 352 | 616 | 1.00 | — | — |
+| adaptive | 0.692 | 0.865 | 0.885 | 0.904 | 0.783 | 0.542 | 0.714 | 0.058 | 178 | 326 | 0.71 | — | — |
+| crag | 0.673 | 0.750 | 0.750 | 0.750 | 0.712 | 0.333 | 0.714 | 0.154 | 799 | 1861 | 1.71 | — | — |
 
 Refusal: `refusal_acc` = correct refusals on not-in-corpus items; `false_refusal` = wrong refusals on answerable items. Non-CRAG arms refuse when top-1 dense cosine < 0.35 (uncalibrated default, not tuned on the golden set).
 
