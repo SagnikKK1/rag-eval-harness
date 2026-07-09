@@ -14,9 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import streamlit as st  # noqa: E402
 
-from rag.config import RagConfig  # noqa: E402
-from rag.generate import generate  # noqa: E402
-from rag.pipeline import REFUSAL, RagPipeline  # noqa: E402
+from rag_eval.config import RagConfig  # noqa: E402
+from rag_eval.generate import generate  # noqa: E402
+from rag_eval.pipeline import REFUSAL, RagPipeline  # noqa: E402
 
 st.set_page_config(page_title="RAG Eval Harness", layout="wide")
 st.title("RAG Eval Harness — adaptive reranking + Corrective-RAG")

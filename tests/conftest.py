@@ -3,11 +3,11 @@ from __future__ import annotations
 
 import pytest
 
-import rag.chunk as chunk_mod
-from rag import ingest
-from rag.config import RagConfig
-from rag.index import build_index
-from rag.retrieve import Retriever
+import rag_eval.chunk as chunk_mod
+from rag_eval import ingest
+from rag_eval.config import RagConfig
+from rag_eval.index import build_index
+from rag_eval.retrieve import Retriever
 
 _RAW = """\
 2025-06-10T05:04:26Z

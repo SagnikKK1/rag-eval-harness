@@ -7,11 +7,19 @@ configurations write to distinct files instead of clobbering each other.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = REPO_ROOT / "data"
+# Data-directory resolution, in priority order:
+#   1. RAG_EVAL_DATA env var (library / production usage)
+#   2. <repo root>/data when running from a source checkout (editable install)
+#   3. ./data relative to the CWD (installed-package fallback)
+_REPO_CANDIDATE = Path(__file__).resolve().parent.parent / "data"
+DATA_DIR = Path(
+    os.environ.get("RAG_EVAL_DATA")
+    or (_REPO_CANDIDATE if _REPO_CANDIDATE.exists() else Path.cwd() / "data")
+)
 RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 

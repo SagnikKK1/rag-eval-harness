@@ -1,8 +1,8 @@
 """LangGraph CRAG graph structure (compiles, has the expected nodes/edges)."""
 from __future__ import annotations
 
-from rag.config import RagConfig
-from rag.graph import build_crag_graph, crag_graph_mermaid
+from rag_eval.config import RagConfig
+from rag_eval.graph import build_crag_graph, crag_graph_mermaid
 
 
 def test_graph_compiles_with_expected_nodes():

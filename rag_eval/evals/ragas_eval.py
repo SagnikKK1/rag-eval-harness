@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import os
 
-from rag.config import RagConfig
+from rag_eval.config import RagConfig
 
 
 def ragas_available() -> bool:

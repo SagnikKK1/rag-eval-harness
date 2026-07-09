@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from eval.stats import compare_arms, mcnemar_exact, paired_bootstrap_ci
+from rag_eval.evals.stats import compare_arms, mcnemar_exact, paired_bootstrap_ci
 
 
 def test_mcnemar_no_discordance_is_1():

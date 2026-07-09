@@ -1,0 +1,220 @@
+"""CLI: run the A/B eval over the golden set; print + persist the results table.
+
+    python scripts/run_eval.py                 # all arms, retrieval metrics (no key)
+    python scripts/run_eval.py --generate      # + Ragas faithfulness (needs ANTHROPIC_API_KEY)
+    python scripts/run_eval.py --gate          # CI: fail if any gated arm regresses
+
+Writes eval/results/results.csv and eval/results/results.md, stamped with run
+metadata (git SHA, timestamp, N, models) and a paired-significance table vs the
+baseline arm (McNemar on recall@5, bootstrap CI on MRR).
+"""
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import subprocess
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+from rag_eval.config import RagConfig  # noqa: E402
+from rag_eval.evals.experiment import EVAL_K, run_arm, run_experiment  # noqa: E402
+from rag_eval.evals.experiment import arms as all_arms  # noqa: E402
+from rag_eval.evals.golden.schema import load_golden  # noqa: E402
+from rag_eval.evals.stats import compare_arms  # noqa: E402
+
+RESULTS_DIR = Path.cwd() / "results"  # repo root in dev/CI; caller cwd as a library
+THRESHOLDS = Path(__file__).resolve().parent.parent / "evals" / "thresholds.json"
+
+COLUMNS = [
+    "arm", "recall@1", "recall@3", "recall@5", "recall@10", "mrr", "ndcg@10",
+    "refusal_acc", "false_refusal", "latency_ms", "p95_ms", "ce_calls/q",
+    "faithfulness", "answer_relevancy",
+]
+
+
+def _git_sha() -> str:
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, check=True,
+            cwd=Path.cwd(),
+        ).stdout.strip()
+    except Exception:
+        return "unknown"
+
+
+def _metadata(n_answerable: int, n_refuse: int) -> str:
+    cfg = RagConfig()
+    ts = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
+    return (
+        f"run: {ts} · git {_git_sha()} · N={n_answerable} answerable + {n_refuse} refuse · "
+        f"depth {EVAL_K} · embed `{cfg.embed_model}` · reranker `{cfg.reranker_model}` · "
+        f"chunks {cfg.chunk_size}/{cfg.chunk_overlap}"
+    )
+
+
+def _row(result: dict) -> dict:
+    r = result["retrieval"]
+    gen = result["generation"]
+    gen_cell = lambda key: (  # noqa: E731
+        f"{gen[key]:.3f}" if gen and not gen.get("skipped") else "—"
+    )
+    return {
+        "arm": result["arm"],
+        "recall@1": f"{r['recall_at_1']:.3f}",
+        "recall@3": f"{r['recall_at_3']:.3f}",
+        "recall@5": f"{r['recall_at_5']:.3f}",
+        "recall@10": f"{r['recall_at_10']:.3f}",
+        "mrr": f"{r['mrr']:.3f}",
+        "ndcg@10": f"{r['ndcg_at_10']:.3f}",
+        "refusal_acc": f"{result['refusal']['accuracy']:.3f}",
+        "false_refusal": f"{result['refusal']['false_refusal_rate']:.3f}",
+        "latency_ms": f"{result['latency_ms']:.0f}",
+        "p95_ms": f"{result['latency_p95_ms']:.0f}",
+        "ce_calls/q": f"{result['ce_calls_per_query']:.2f}",
+        "faithfulness": gen_cell("faithfulness"),
+        "answer_relevancy": gen_cell("answer_relevancy"),
+    }
+
+
+def _significance_rows(results: list[dict]) -> list[str]:
+    base = next((r for r in results if r["arm"] == "baseline"), None)
+    if base is None:
+        return ["(no baseline arm in this run — significance table skipped)"]
+    lines = [
+        "| arm vs baseline | Δrecall@5 (won/lost) | McNemar p | ΔMRR [95% CI] | significant? |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for r in results:
+        if r["arm"] == "baseline":
+            continue
+        cmp = compare_arms(base["per_item_hits"], r["per_item_hits"], k=5)
+        b, c = cmp["discordant"]
+        lo, hi = cmp["mrr_ci95"]
+        lines.append(
+            f"| {r['arm']} | +{b}/−{c} | {cmp['recall_at_k_p']:.3f} "
+            f"| {cmp['mrr_delta']:+.3f} [{lo:+.3f}, {hi:+.3f}] "
+            f"| {'yes' if cmp['significant'] else 'no'} |"
+        )
+    return lines
+
+
+def _per_type_rows(results: list[dict]) -> list[str]:
+    """recall@5 / MRR per item type per arm — exposes e.g. how much of an arm's
+    score comes from lexically-easy factoids vs de-lexicalized paraphrases."""
+    from rag_eval.evals.stats import _hit_at, _rr  # reuse the per-item helpers
+
+    types = sorted({t for r in results for t in r.get("per_item_types", [])})
+    if not types:
+        return []
+    lines = ["| arm | " + " | ".join(f"{t} r@5 / MRR (n)" for t in types) + " |",
+             "| --- | " + " | ".join("---" for _ in types) + " |"]
+    for r in results:
+        cells = []
+        for t in types:
+            pairs = [h for h, ty in zip(r["per_item_hits"], r["per_item_types"]) if ty == t]
+            if not pairs:
+                cells.append("—")
+                continue
+            r5 = sum(_hit_at(h, 5) for h in pairs) / len(pairs)
+            mrr = sum(_rr(h) for h in pairs) / len(pairs)
+            cells.append(f"{r5:.2f} / {mrr:.2f} ({len(pairs)})")
+        lines.append(f"| {r['arm']} | " + " | ".join(cells) + " |")
+    return lines
+
+
+def _risk_coverage_rows() -> list[str]:
+    """Sweep the abstention threshold: refusal accuracy vs false-refusal trade-off.
+    Uses top-1 dense cosine (the mechanism every non-CRAG arm shares)."""
+    from rag_eval.retrieve import Retriever
+
+    golden = load_golden()
+    retriever = Retriever(config=RagConfig())
+    scores = [(retriever.dense_top_score(g.question), g.is_refuse) for g in golden]
+    n_refuse = sum(1 for _, is_r in scores if is_r)
+    n_ans = len(scores) - n_refuse
+    lines = ["| threshold | refusal_acc (refuse items) | false_refusal (answerable) |",
+             "| --- | --- | --- |"]
+    for t in (0.25, 0.30, 0.35, 0.40, 0.45, 0.50):
+        ra = sum(1 for s, is_r in scores if is_r and s < t) / n_refuse
+        fr = sum(1 for s, is_r in scores if not is_r and s < t) / n_ans
+        lines.append(f"| {t:.2f} | {ra:.3f} | {fr:.3f} |")
+    return lines
+
+
+def _markdown(rows: list[dict], results: list[dict], meta: str, generated: bool) -> str:
+    head = "| " + " | ".join(COLUMNS) + " |"
+    sep = "| " + " | ".join("---" for _ in COLUMNS) + " |"
+    body = "\n".join("| " + " | ".join(r[c] for c in COLUMNS) + " |" for r in rows)
+    sig = "\n".join(_significance_rows(results))
+    gen_note = (
+        "Generation metrics via Ragas (Anthropic judge)."
+        if generated else
+        "_Generation columns pending ANTHROPIC_API_KEY (`--generate`)._"
+    )
+    per_type = "\n".join(_per_type_rows(results))
+    risk_cov = "\n".join(_risk_coverage_rows())
+    return (
+        f"### RAG A/B results\n\n{meta}\n\n{head}\n{sep}\n{body}\n\n"
+        f"Refusal: `refusal_acc` = correct refusals on not-in-corpus items; "
+        f"`false_refusal` = wrong refusals on answerable items. Non-CRAG arms "
+        f"refuse when top-1 dense cosine < {RagConfig().refusal_min_top_score} "
+        f"(uncalibrated default, not tuned on the golden set).\n\n"
+        f"#### Paired significance vs baseline\n\n{sig}\n\n"
+        f"At this N, treat non-significant deltas as directional only.\n\n"
+        f"#### Per-type breakdown\n\n{per_type}\n\n"
+        f"#### Abstention risk–coverage (dense-confidence threshold sweep)\n\n"
+        f"{risk_cov}\n\n{gen_note}\n"
+    )
+
+
+def _write(rows: list[dict], md: str) -> None:
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    with (RESULTS_DIR / "results.csv").open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+    (RESULTS_DIR / "results.md").write_text(md, encoding="utf-8")
+
+
+def run_gate() -> int:
+    cfg = json.loads(THRESHOLDS.read_text())
+    golden = load_golden()
+    failed = False
+    for arm_name, thr in cfg["arms"].items():
+        result = run_arm(arm_name, all_arms()[arm_name], golden, with_generation=False)
+        r = result["retrieval"]
+        checks = {"recall@5": (r["recall_at_5"], thr["recall@5"]), "mrr": (r["mrr"], thr["mrr"])}
+        for k, (got, want) in checks.items():
+            ok = got >= want
+            failed |= not ok
+            print(f"  [{'ok' if ok else 'FAIL'}] {arm_name} {k} = {got:.3f} (threshold {want})")
+    print("GATE FAILED." if failed else "GATE PASSED.")
+    return 1 if failed else 0
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Run the RAG A/B eval.")
+    parser.add_argument("--arms", nargs="*", default=None, help="Subset of arms to run.")
+    parser.add_argument("--generate", action="store_true", help="Also run Ragas generation eval.")
+    parser.add_argument("--gate", action="store_true", help="CI gate: exit 1 on regression.")
+    args = parser.parse_args()
+
+    if args.gate:
+        sys.exit(run_gate())
+
+    golden = load_golden()
+    n_refuse = sum(1 for g in golden if g.is_refuse)
+    results = run_experiment(args.arms, with_generation=args.generate)
+    rows = [_row(r) for r in results]
+    generated = any(r["generation"] and not r["generation"].get("skipped") for r in results)
+    md = _markdown(rows, results, _metadata(len(golden) - n_refuse, n_refuse), generated)
+    _write(rows, md)
+    print(md)
+    print(f"Wrote {RESULTS_DIR/'results.csv'} and {RESULTS_DIR/'results.md'}")
+
+
+if __name__ == "__main__":
+    main()

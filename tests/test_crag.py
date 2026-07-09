@@ -11,9 +11,9 @@ from dataclasses import dataclass
 
 import pytest
 
-import rag.llm as llm_mod
-from rag.agent import run_crag
-from rag.config import RagConfig
+import rag_eval.llm as llm_mod
+from rag_eval.agent import run_crag
+from rag_eval.config import RagConfig
 
 ENGINES = ["langgraph", "plain"]
 
@@ -100,7 +100,7 @@ def test_widen_fallback_when_reformulation_disabled(engine):
 def test_mixed_signal_pool_is_rescored_with_one_arbiter(monkeypatch, engine):
     """Rounds scoring on different scales (CE logits vs cosine) must not be sorted
     raw — the finalize step rescoreswith the cross-encoder (mocked here)."""
-    import rag.rerank as rerank_mod
+    import rag_eval.rerank as rerank_mod
 
     # Mock CE: 'gold' chunk wins decisively at rescore time.
     def fake_ce(query, candidates, config):
@@ -108,7 +108,7 @@ def test_mixed_signal_pool_is_rescored_with_one_arbiter(monkeypatch, engine):
 
     monkeypatch.setattr(rerank_mod, "cross_encoder_scores", fake_ce)
 
-    from rag.agent import _finalize_pool
+    from rag_eval.agent import _finalize_pool
 
     cfg = _cfg(engine, k=2)
     # Mixed pool: cosine round kept junk at 0.44; CE round kept gold at logit 0.2.
@@ -121,13 +121,13 @@ def test_mixed_signal_pool_is_rescored_with_one_arbiter(monkeypatch, engine):
 
 
 def test_single_signal_pool_sorts_directly_without_ce(monkeypatch):
-    import rag.rerank as rerank_mod
+    import rag_eval.rerank as rerank_mod
 
     def boom(*a, **kw):
         raise AssertionError("CE must not be called for single-signal pools")
 
     monkeypatch.setattr(rerank_mod, "cross_encoder_scores", boom)
-    from rag.agent import _finalize_pool
+    from rag_eval.agent import _finalize_pool
 
     cfg = _cfg("plain", k=2)
     gathered = [

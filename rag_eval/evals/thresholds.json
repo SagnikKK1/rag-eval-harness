@@ -1,0 +1,7 @@
+{
+  "arms": {
+    "baseline": { "recall@5": 0.75, "mrr": 0.62 },
+    "reranked": { "recall@5": 0.87, "mrr": 0.8 }
+  },
+  "_comment": "CI regression gate. Deterministic, keyless. Calibrated 2026-07-09 against the N=99 golden set (baseline recall@5=0.798 mrr=0.660; reranked 0.919/0.844): thresholds sit ~3-4 golden items below observed. Gating both arms means a reranker-path regression can no longer merge green. Recalibrate whenever the golden set changes."
+}

@@ -1,8 +1,8 @@
 """Tool-using agent loop — driven by a mocked Anthropic client (key-free)."""
 from __future__ import annotations
 
-import rag.tool_agent as ta
-from rag.tool_agent import run_tool_agent
+import rag_eval.tool_agent as ta
+from rag_eval.tool_agent import run_tool_agent
 
 
 class FB:

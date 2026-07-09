@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from rank_bm25 import BM25Okapi
 
-from rag.bm25 import Bm25Index, _tokenize
-from rag.chunk import Chunk
-from rag.retrieve import rrf_fuse
+from rag_eval.bm25 import Bm25Index, _tokenize
+from rag_eval.chunk import Chunk
+from rag_eval.retrieve import rrf_fuse
 
 
 def _chunk(cid: str, text: str = "") -> Chunk:

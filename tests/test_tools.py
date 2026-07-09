@@ -1,7 +1,7 @@
 """Agent tools — calculator, search_corpus, fetch_chunk (key-free, no LLM)."""
 from __future__ import annotations
 
-from rag.tools import TOOL_NAMES, ToolContext, execute
+from rag_eval.tools import TOOL_NAMES, ToolContext, execute
 
 
 def test_calculator_basic():

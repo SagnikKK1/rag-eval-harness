@@ -18,9 +18,9 @@ from __future__ import annotations
 
 import time
 
-from rag import rerank as rerank_mod
-from rag.config import RagConfig
-from rag.pipeline import RagPipeline
+from rag_eval import rerank as rerank_mod
+from rag_eval.config import RagConfig
+from rag_eval.pipeline import RagPipeline
 
 from .golden.schema import GoldenItem, load_golden
 from .retrieval_metrics import evaluate_retrieval, hit_ranks, refusal_accuracy

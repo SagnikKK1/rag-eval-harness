@@ -20,7 +20,9 @@ jobs:
           path: ~/.cache/huggingface
           key: hf-minilm-l6-v2-msmarco-minilm-l6-v2
       - name: Install
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install -e . --no-deps   # exercise the packaging (console scripts, package data)
       - name: Lint
         run: |
           pip install ruff

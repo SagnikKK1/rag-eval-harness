@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from rag.config import RagConfig
-from rag.policy import effective_rerank_policy, should_rerank
+from rag_eval.config import RagConfig
+from rag_eval.policy import effective_rerank_policy, should_rerank
 
 
 def _cands(scores):

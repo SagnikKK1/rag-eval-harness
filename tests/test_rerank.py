@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-import rag.rerank as rerank_mod
-from rag.config import RagConfig
-from rag.rerank import rerank, score_candidates
+import rag_eval.rerank as rerank_mod
+from rag_eval.config import RagConfig
+from rag_eval.rerank import rerank, score_candidates
 
 
 @dataclass(frozen=True)

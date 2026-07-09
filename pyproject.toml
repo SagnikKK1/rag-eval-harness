@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rag-eval-harness"
-version = "0.1.0"
+version = "0.2.0"
 description = "RAG evaluation harness with adaptive reranking and Corrective-RAG (LangGraph)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,12 +31,17 @@ demo = ["fastapi", "uvicorn", "streamlit"]
 dev = ["pytest==9.1.1", "ruff", "mypy", "pre-commit"]
 
 [project.scripts]
-rag-ask = "scripts.ask:main"
-rag-build-index = "scripts.build_index:main"
-rag-eval = "scripts.run_eval:main"
+rag-ask = "rag_eval.cli.ask:main"
+rag-build-index = "rag_eval.cli.build_index:main"
+rag-eval = "rag_eval.cli.run_eval:main"
+rag-chunk-sweep = "rag_eval.cli.chunk_sweep:main"
 
-[tool.setuptools]
-packages = ["rag", "eval", "eval.golden", "scripts", "app"]
+[tool.setuptools.packages.find]
+include = ["rag_eval*"]
+
+[tool.setuptools.package-data]
+"rag_eval.evals" = ["thresholds.json"]
+"rag_eval.evals.golden" = ["*.jsonl"]
 
 [tool.ruff]
 line-length = 100

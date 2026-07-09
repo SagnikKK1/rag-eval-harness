@@ -11,9 +11,9 @@ from dataclasses import asdict
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from rag.config import RagConfig
-from rag.generate import generate
-from rag.pipeline import REFUSAL, RagPipeline
+from rag_eval.config import RagConfig
+from rag_eval.generate import generate
+from rag_eval.pipeline import REFUSAL, RagPipeline
 
 app = FastAPI(title="RAG Eval Harness", description="Adaptive reranking + Corrective-RAG demo")
 

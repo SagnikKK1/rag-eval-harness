@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import pytest
 
-from eval.retrieval_metrics import (
+from rag_eval.evals.retrieval_metrics import (
     evaluate_retrieval,
     hit_ranks,
     ndcg_at_k,

@@ -11,9 +11,9 @@ from dataclasses import replace
 
 import pytest
 
-from rag.config import RagConfig
-from rag.index import build_index
-from rag.retrieve import Retriever
+from rag_eval.config import RagConfig
+from rag_eval.index import build_index
+from rag_eval.retrieve import Retriever
 
 RAW_SAMPLE = """\
 2025-06-10T05:04:26Z
@@ -40,7 +40,7 @@ def config(tmp_path):
     processed = tmp_path / "processed"
     processed.mkdir()
     # Rebuild the corpus from the temp raw file into the temp processed dir.
-    from rag import ingest
+    from rag_eval import ingest
 
     ingest.build_corpus(raw_files=[raw], out_path=processed / "corpus.jsonl")
     cfg = RagConfig(chunk_size=128, chunk_overlap=16, k=3, processed_dir=processed)
@@ -50,7 +50,7 @@ def config(tmp_path):
 def test_index_builds_and_retrieves(config):
     cfg, corpus_path = config
     # build_index -> build_chunks reads the temp corpus
-    import rag.chunk as chunk_mod
+    import rag_eval.chunk as chunk_mod
 
     orig = chunk_mod.load_corpus
     chunk_mod.load_corpus = lambda path=None: orig(corpus_path)
@@ -81,7 +81,7 @@ def test_retrieval_needs_no_api_key(config):
     for key in ("ANTHROPIC_API_KEY", "OPENROUTER_API_KEY", "DATABASE_URL"):
         assert os.environ.get(key) in (None, ""), f"{key} unexpectedly set in test env"
 
-    import rag.chunk as chunk_mod
+    import rag_eval.chunk as chunk_mod
 
     orig = chunk_mod.load_corpus
     chunk_mod.load_corpus = lambda path=None: orig(corpus_path)
@@ -96,6 +96,6 @@ def test_retrieval_needs_no_api_key(config):
 
 def test_modules_import_without_keys():
     # Importing the generation/retrieval modules must not require any key.
-    import rag.generate  # noqa: F401
-    import rag.llm  # noqa: F401
-    import rag.retrieve  # noqa: F401
+    import rag_eval.generate  # noqa: F401
+    import rag_eval.llm  # noqa: F401
+    import rag_eval.retrieve  # noqa: F401

@@ -1,8 +1,8 @@
 """Golden-set resolution: word-boundary matching + comment-level gold."""
 from __future__ import annotations
 
-from eval.golden.build_seed import _phrase_pattern, resolve
-from rag.ingest import Comment
+from rag_eval.evals.golden.build_seed import _phrase_pattern, resolve
+from rag_eval.ingest import Comment
 
 
 def _c(sid: str, text: str) -> Comment:
