@@ -26,7 +26,7 @@ jobs:
       - name: Lint
         run: |
           pip install ruff
-          ruff check rag eval scripts app
+          ruff check rag_eval app tests scripts
       - name: Tests (no API key needed)
         run: pytest -q
       - name: Build index (FAISS + BM25)
